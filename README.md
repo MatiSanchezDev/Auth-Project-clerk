@@ -1,36 +1,84 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Auth Project con Clerk
 
-## Getting Started
+Este repositorio sirve como guía y referencia para la implementación de autenticación de usuarios, protección de rutas y gestión de roles (Admin) utilizando **Clerk** en una aplicación **Next.js 15+ (App Router)**.
 
-First, run the development server:
+## 🚀 Características Implementadas
+
+- **Autenticación Completa**: Inicio de sesión (Sign In), Registro (Sign Up) y Gestión de cuenta mediante componentes de Clerk.
+- **Protección de Rutas**:
+  - **Middleware**: Lógica centralizada para interceptar peticiones y proteger rutas específicas (`/ruta-privada`, `/ruta-admin`).
+  - **Renderizado Condicional (UI)**: Ocultar/Mostrar elementos (como enlaces del Navbar) según el estado de autenticación y rol del usuario.
+- **Manejo de Roles (RBAC)**:
+  - Definición de tipos personalizados (`globals.d.ts`) para extender la sesión de Clerk.
+  - Verificación de rol `admin` para restringir el acceso a rutas administrativas.
+- **Componentes UI**:
+  - `Navbar`: Barra de navegación dinámica.
+  - `UnloggedHero`: Vista para usuarios no autenticados.
+  - `ButtonSignOut`: Botón de cierre de sesión.
+
+## 🛠️ Instalación y Configuración
+
+### 1. Clonar el repositorio e instalar dependencias
+
+```bash
+npm install
+```
+
+### 2. Variables de Entorno
+
+Crear un archivo `.env.local` en la raíz del proyecto con las claves de Clerk:
+
+```env
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+```
+
+### 3. Ejecutar el servidor de desarrollo
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 📂 Estructura Clave de Archivos
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Configuración Global
+- **`app/layout.tsx`**: Envuelve la aplicación con `<ClerkProvider>` para habilitar la autenticación en todo el proyecto.
+- **`proxy.ts` (Middleware)**: Contiene la configuración de `clerkMiddleware`. Define qué rutas son públicas, cuáles requieren auth y cuáles requieren rol de admin.
+  > **Nota Importante**: Renombrar proxy.ts a middleware.ts y estás usando una version anterior a Nextjs 15. Si estás usando Nextjs 15, puedes usar el archivo proxy.ts que viene por defecto.
+- **`types/globals.d.ts`**: Extiende la interfaz `CustomJwtSessionClaims` de Clerk para incluir `metadata.role`, permitiendo tipado seguro en TypeScript.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Utils
+- **`utils/roles.ts`**: Función helper `checkRole` para verificar roles desde el servidor.
 
-## Learn More
+### Rutas
+- **`app/page.tsx`**: Página principal que verifica `isAuthenticated` para mostrar contenido personalizado o el componente `UnloggedHero`.
+- **`app/ruta-privada/page.tsx`**: Ejemplo de ruta accesible solo para usuarios logueados.
+- **`app/ruta-admin/page.tsx`**: Ejemplo de ruta protegida exclusivamente para usuarios con rol `admin`.
 
-To learn more about Next.js, take a look at the following resources:
+## 🔒 Cómo Proteger Rutas
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Opción A: Middleware (Recomendado)
+En el archivo de middleware se definen "Route Matchers". Por ejemplo:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```typescript
+const isAdminRoute = createRouteMatcher(['/ruta-admin(.*)'])
 
-## Deploy on Vercel
+export default clerkMiddleware(async (auth, req) => {
+  if (isAdminRoute(req) && (await auth()).sessionClaims?.metadata?.role !== 'admin') {
+    // Redirigir si no es admin
+    const url = new URL('/', req.url)
+    return NextResponse.redirect(url)
+  }
+})
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Opción B: Verificación en Página (Server Components)
+```typescript
+import { auth } from "@clerk/nextjs/server";
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+export default async function Page() {
+  const { userId } = await auth();
+  if (!userId) return <div>Acceso denegado</div>;
+  // ...
+}
+```
